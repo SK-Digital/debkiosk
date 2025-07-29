@@ -35,54 +35,87 @@ apt-get install -y adduser passwd
 GROUP_CREATED=false
 echo "Attempting to create kiosk group..."
 
-if command -v addgroup >/dev/null 2>&1; then
-    echo "Found addgroup command, attempting to create group..."
-    # Use Debian's recommended addgroup command
-    if addgroup --system kiosk 2>&1; then
-        echo "Group kiosk created successfully with addgroup"
-        GROUP_CREATED=true
-    elif getent group kiosk >/dev/null 2>&1; then
-        echo "Group kiosk already exists"
-        GROUP_CREATED=true
-    else
-        echo "Failed to create group kiosk with addgroup"
-    fi
-elif command -v groupadd >/dev/null 2>&1; then
-    echo "Found groupadd command, attempting to create group..."
-    # Fallback to low-level groupadd command
-    if groupadd -f kiosk 2>&1; then
-        echo "Group kiosk created successfully with groupadd"
-        GROUP_CREATED=true
-    elif getent group kiosk >/dev/null 2>&1; then
-        echo "Group kiosk already exists"
-        GROUP_CREATED=true
-    else
-        echo "Failed to create group kiosk with groupadd"
-    fi
+# First check if group already exists
+if getent group kiosk >/dev/null 2>&1; then
+    echo "Group kiosk already exists"
+    GROUP_CREATED=true
 else
-    echo "Neither addgroup nor groupadd commands found, attempting to install..."
-    apt-get install -y passwd
-    if command -v groupadd >/dev/null 2>&1; then
-        echo "groupadd command now available after package installation"
+    # Try addgroup first (Debian recommended)
+    if command -v addgroup >/dev/null 2>&1; then
+        echo "Found addgroup command, attempting to create group..."
+        if addgroup --system kiosk 2>&1; then
+            echo "Group kiosk created successfully with addgroup"
+            GROUP_CREATED=true
+        else
+            echo "addgroup failed, trying alternative approach..."
+            # Try without --system flag
+            if addgroup kiosk 2>&1; then
+                echo "Group kiosk created successfully with addgroup (without --system)"
+                GROUP_CREATED=true
+            else
+                echo "addgroup failed completely"
+            fi
+        fi
+    fi
+    
+    # If addgroup failed or doesn't exist, try groupadd
+    if [ "$GROUP_CREATED" = false ] && command -v groupadd >/dev/null 2>&1; then
+        echo "Found groupadd command, attempting to create group..."
         if groupadd -f kiosk 2>&1; then
             echo "Group kiosk created successfully with groupadd"
             GROUP_CREATED=true
-        elif getent group kiosk >/dev/null 2>&1; then
-            echo "Group kiosk already exists"
-            GROUP_CREATED=true
         else
-            echo "Failed to create group kiosk with groupadd"
+            echo "groupadd failed"
         fi
-    else
-        echo "ERROR: Could not install or find group creation commands"
-        exit 1
+    fi
+    
+    # If both failed, try to install packages and retry
+    if [ "$GROUP_CREATED" = false ]; then
+        echo "Both addgroup and groupadd failed, attempting to install packages..."
+        apt-get update
+        apt-get install -y adduser passwd
+        sleep 2
+        
+        # Try addgroup again after package installation
+        if command -v addgroup >/dev/null 2>&1; then
+            echo "Retrying addgroup after package installation..."
+            if addgroup --system kiosk 2>&1; then
+                echo "Group kiosk created successfully with addgroup (retry)"
+                GROUP_CREATED=true
+            elif addgroup kiosk 2>&1; then
+                echo "Group kiosk created successfully with addgroup (retry, no --system)"
+                GROUP_CREATED=true
+            fi
+        fi
+        
+        # Try groupadd again after package installation
+        if [ "$GROUP_CREATED" = false ] && command -v groupadd >/dev/null 2>&1; then
+            echo "Retrying groupadd after package installation..."
+            if groupadd -f kiosk 2>&1; then
+                echo "Group kiosk created successfully with groupadd (retry)"
+                GROUP_CREATED=true
+            fi
+        fi
     fi
 fi
 
+# Final verification
 if [ "$GROUP_CREATED" = false ]; then
-    echo "ERROR: Could not create kiosk group. Manual intervention required."
+    echo "ERROR: Could not create kiosk group after all attempts"
+    echo "Manual intervention required. Please run:"
+    echo "  sudo addgroup kiosk"
+    echo "  or"
+    echo "  sudo groupadd kiosk"
     exit 1
 fi
+
+# Verify group was actually created
+if ! getent group kiosk >/dev/null 2>&1; then
+    echo "ERROR: Group kiosk does not exist after creation attempts"
+    exit 1
+fi
+
+echo "Group creation successful and verified"
 
 # create user if not exists (Debian-recommended approach)
 if id -u kiosk &>/dev/null; then
@@ -90,43 +123,71 @@ if id -u kiosk &>/dev/null; then
 else
     echo "Attempting to create kiosk user..."
     USER_CREATED=false
+    
+    # Try adduser first (Debian recommended)
     if command -v adduser >/dev/null 2>&1; then
         echo "Found adduser command, attempting to create user..."
-        # Use Debian's recommended adduser command
         if adduser --system --group --home /home/kiosk --shell /bin/bash kiosk 2>&1; then
             echo "User kiosk created successfully with adduser"
             USER_CREATED=true
         else
-            echo "Failed to create user kiosk with adduser"
+            echo "adduser failed, trying alternative approach..."
+            # Try without --system flag
+            if adduser --group --home /home/kiosk --shell /bin/bash kiosk 2>&1; then
+                echo "User kiosk created successfully with adduser (without --system)"
+                USER_CREATED=true
+            else
+                echo "adduser failed completely"
+            fi
         fi
-    elif command -v useradd >/dev/null 2>&1; then
+    fi
+    
+    # If adduser failed or doesn't exist, try useradd
+    if [ "$USER_CREATED" = false ] && command -v useradd >/dev/null 2>&1; then
         echo "Found useradd command, attempting to create user..."
-        # Fallback to low-level useradd command
         if useradd -m kiosk -g kiosk -s /bin/bash 2>&1; then
             echo "User kiosk created successfully with useradd"
             USER_CREATED=true
         else
-            echo "Failed to create user kiosk with useradd"
+            echo "useradd failed"
         fi
-    else
-        echo "Neither adduser nor useradd commands found, attempting to install..."
-        apt-get install -y passwd
-        if command -v useradd >/dev/null 2>&1; then
-            echo "useradd command now available after package installation"
-            if useradd -m kiosk -g kiosk -s /bin/bash 2>&1; then
-                echo "User kiosk created successfully with useradd"
+    fi
+    
+    # If both failed, try to install packages and retry
+    if [ "$USER_CREATED" = false ]; then
+        echo "Both adduser and useradd failed, attempting to install packages..."
+        apt-get update
+        apt-get install -y adduser passwd
+        sleep 2
+        
+        # Try adduser again after package installation
+        if command -v adduser >/dev/null 2>&1; then
+            echo "Retrying adduser after package installation..."
+            if adduser --system --group --home /home/kiosk --shell /bin/bash kiosk 2>&1; then
+                echo "User kiosk created successfully with adduser (retry)"
                 USER_CREATED=true
-            else
-                echo "Failed to create user kiosk with useradd"
+            elif adduser --group --home /home/kiosk --shell /bin/bash kiosk 2>&1; then
+                echo "User kiosk created successfully with adduser (retry, no --system)"
+                USER_CREATED=true
             fi
-        else
-            echo "ERROR: Could not install or find user creation commands"
-            exit 1
+        fi
+        
+        # Try useradd again after package installation
+        if [ "$USER_CREATED" = false ] && command -v useradd >/dev/null 2>&1; then
+            echo "Retrying useradd after package installation..."
+            if useradd -m kiosk -g kiosk -s /bin/bash 2>&1; then
+                echo "User kiosk created successfully with useradd (retry)"
+                USER_CREATED=true
+            fi
         fi
     fi
     
     if [ "$USER_CREATED" = false ]; then
-        echo "ERROR: Could not create kiosk user. Manual intervention required."
+        echo "ERROR: Could not create kiosk user after all attempts"
+        echo "Manual intervention required. Please run:"
+        echo "  sudo adduser --system --group kiosk"
+        echo "  or"
+        echo "  sudo useradd -m kiosk -g kiosk"
         exit 1
     fi
 fi

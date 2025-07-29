@@ -72,7 +72,6 @@ do
         --disable-suggestions-service \
         --disable-save-password-bubble \
         --disable-session-crashed-bubble \
-        --incognito \
         --kiosk $KIOSK_URL
     sleep 5
 done &

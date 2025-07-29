@@ -27,9 +27,32 @@ fi
 
 echo "Running as root - proceeding with user/group creation..."
 
-# Install required packages for user/group management
+# Install required packages for user/group management FIRST
 echo "Installing required packages for user/group management..."
-apt-get install -y adduser passwd
+apt-get update
+apt-get install -y adduser passwd shadow
+
+# Wait a moment for package installation to complete
+sleep 3
+
+# Verify commands are now available
+echo "Verifying user/group management commands are available..."
+if ! command -v addgroup >/dev/null 2>&1 && ! command -v groupadd >/dev/null 2>&1; then
+    echo "ERROR: Neither addgroup nor groupadd commands are available after package installation"
+    echo "Trying to install additional packages..."
+    apt-get install -y util-linux
+    sleep 2
+fi
+
+# Verify we have the necessary commands before proceeding
+if ! command -v addgroup >/dev/null 2>&1 && ! command -v groupadd >/dev/null 2>&1; then
+    echo "CRITICAL ERROR: No group creation commands available after package installation"
+    echo "Available commands:"
+    ls -la /usr/sbin/add* /usr/sbin/group* /usr/bin/add* /usr/bin/group* 2>/dev/null || echo "No group commands found in standard locations"
+    echo "Please manually install user management packages:"
+    echo "  sudo apt-get install -y adduser passwd shadow util-linux"
+    exit 1
+fi
 
 # create group (Debian-recommended approach)
 GROUP_CREATED=false
@@ -73,7 +96,7 @@ else
     if [ "$GROUP_CREATED" = false ]; then
         echo "Both addgroup and groupadd failed, attempting to install packages..."
         apt-get update
-        apt-get install -y adduser passwd
+        apt-get install -y adduser passwd shadow util-linux
         sleep 2
         
         # Try addgroup again after package installation
@@ -157,7 +180,7 @@ else
     if [ "$USER_CREATED" = false ]; then
         echo "Both adduser and useradd failed, attempting to install packages..."
         apt-get update
-        apt-get install -y adduser passwd
+        apt-get install -y adduser passwd shadow util-linux
         sleep 2
         
         # Try adduser again after package installation

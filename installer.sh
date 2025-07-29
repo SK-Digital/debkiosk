@@ -19,11 +19,23 @@ mkdir -p /home/kiosk/.config/openbox 2>/dev/null || {
     exit 1
 }
 
-# create group (handle different systems)
+# create group (Debian-recommended approach)
 GROUP_CREATED=false
-if command -v groupadd >/dev/null 2>&1; then
+if command -v addgroup >/dev/null 2>&1; then
+    # Use Debian's recommended addgroup command
+    if addgroup --system kiosk 2>/dev/null; then
+        echo "Group kiosk created successfully with addgroup"
+        GROUP_CREATED=true
+    elif getent group kiosk >/dev/null 2>&1; then
+        echo "Group kiosk already exists"
+        GROUP_CREATED=true
+    else
+        echo "Failed to create group kiosk with addgroup"
+    fi
+elif command -v groupadd >/dev/null 2>&1; then
+    # Fallback to low-level groupadd command
     if groupadd -f kiosk 2>/dev/null; then
-        echo "Group kiosk created successfully"
+        echo "Group kiosk created successfully with groupadd"
         GROUP_CREATED=true
     elif getent group kiosk >/dev/null 2>&1; then
         echo "Group kiosk already exists"
@@ -34,46 +46,30 @@ if command -v groupadd >/dev/null 2>&1; then
 fi
 
 if [ "$GROUP_CREATED" = false ]; then
-    echo "Trying addgroup as alternative..."
-    if command -v addgroup >/dev/null 2>&1; then
-        if addgroup --system kiosk 2>/dev/null; then
-            echo "Group kiosk created successfully with addgroup"
-            GROUP_CREATED=true
-        elif getent group kiosk >/dev/null 2>&1; then
-            echo "Group kiosk already exists"
-            GROUP_CREATED=true
-        else
-            echo "Failed to create group kiosk with addgroup"
-        fi
-    fi
-fi
-
-if [ "$GROUP_CREATED" = false ]; then
     echo "ERROR: Could not create kiosk group. Manual intervention required."
     exit 1
 fi
 
-# create user if not exists (handle different systems)
+# create user if not exists (Debian-recommended approach)
 if id -u kiosk &>/dev/null; then
     echo "User kiosk already exists"
 else
     USER_CREATED=false
-    if command -v useradd >/dev/null 2>&1; then
-        if useradd -m kiosk -g kiosk -s /bin/bash 2>/dev/null; then
-            echo "User kiosk created successfully"
-            USER_CREATED=true
-        else
-            echo "Failed to create user kiosk with useradd"
-        fi
-    fi
-    
-    if [ "$USER_CREATED" = false ] && command -v adduser >/dev/null 2>&1; then
-        echo "Trying adduser as alternative..."
+    if command -v adduser >/dev/null 2>&1; then
+        # Use Debian's recommended adduser command
         if adduser --system --group --home /home/kiosk --shell /bin/bash kiosk 2>/dev/null; then
             echo "User kiosk created successfully with adduser"
             USER_CREATED=true
         else
             echo "Failed to create user kiosk with adduser"
+        fi
+    elif command -v useradd >/dev/null 2>&1; then
+        # Fallback to low-level useradd command
+        if useradd -m kiosk -g kiosk -s /bin/bash 2>/dev/null; then
+            echo "User kiosk created successfully with useradd"
+            USER_CREATED=true
+        else
+            echo "Failed to create user kiosk with useradd"
         fi
     fi
     

@@ -14,16 +14,41 @@ apt-get install \
     -y
 
 # dir
-mkdir -p /home/kiosk/.config/openbox
+mkdir -p /home/kiosk/.config/openbox 2>/dev/null || {
+    echo "Could not create directory /home/kiosk/.config/openbox"
+    exit 1
+}
 
-# create group
-groupadd -f kiosk
+# create group (handle different systems)
+if command -v groupadd >/dev/null 2>&1; then
+    groupadd -f kiosk 2>/dev/null || echo "Group kiosk already exists or could not be created"
+else
+    echo "groupadd command not found, trying alternative methods"
+    # Try to create group using addgroup (Debian/Ubuntu alternative)
+    if command -v addgroup >/dev/null 2>&1; then
+        addgroup --system kiosk 2>/dev/null || echo "Could not create kiosk group"
+    fi
+fi
 
-# create user if not exists
-id -u kiosk &>/dev/null || useradd -m kiosk -g kiosk -s /bin/bash 
+# create user if not exists (handle different systems)
+if id -u kiosk &>/dev/null; then
+    echo "User kiosk already exists"
+else
+    if command -v useradd >/dev/null 2>&1; then
+        useradd -m kiosk -g kiosk -s /bin/bash 2>/dev/null || echo "Could not create kiosk user"
+    elif command -v adduser >/dev/null 2>&1; then
+        # Debian/Ubuntu alternative
+        adduser --system --group --home /home/kiosk --shell /bin/bash kiosk 2>/dev/null || echo "Could not create kiosk user"
+    else
+        echo "Neither useradd nor adduser found - manual user creation required"
+        exit 1
+    fi
+fi 
 
 # rights
-chown -R kiosk:kiosk /home/kiosk
+chown -R kiosk:kiosk /home/kiosk 2>/dev/null || {
+    echo "Could not set ownership of /home/kiosk - continuing anyway"
+}
 
 # remove virtual consoles
 if [ -e "/etc/X11/xorg.conf" ]; then

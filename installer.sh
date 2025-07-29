@@ -72,6 +72,18 @@ do
         --disable-suggestions-service \
         --disable-save-password-bubble \
         --disable-session-crashed-bubble \
+        --disable-web-security \
+        --disable-features=VizDisplayCompositor \
+        --disable-dev-shm-usage \
+        --disable-gpu \
+        --disable-software-rasterizer \
+        --disable-background-timer-throttling \
+        --disable-backgrounding-occluded-windows \
+        --disable-renderer-backgrounding \
+        --disable-field-trial-config \
+        --disable-ipc-flooding-protection \
+        --no-sandbox \
+        --user-data-dir=/home/kiosk/.config/chromium-kiosk \
         --kiosk $KIOSK_URL
     sleep 5
 done &

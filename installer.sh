@@ -27,6 +27,10 @@ fi
 
 echo "Running as root - proceeding with user/group creation..."
 
+# Install required packages for user/group management
+echo "Installing required packages for user/group management..."
+apt-get install -y adduser passwd
+
 # create group (Debian-recommended approach)
 GROUP_CREATED=false
 echo "Attempting to create kiosk group..."
@@ -56,8 +60,23 @@ elif command -v groupadd >/dev/null 2>&1; then
         echo "Failed to create group kiosk with groupadd"
     fi
 else
-    echo "ERROR: Neither addgroup nor groupadd commands found"
-    exit 1
+    echo "Neither addgroup nor groupadd commands found, attempting to install..."
+    apt-get install -y passwd
+    if command -v groupadd >/dev/null 2>&1; then
+        echo "groupadd command now available after package installation"
+        if groupadd -f kiosk 2>&1; then
+            echo "Group kiosk created successfully with groupadd"
+            GROUP_CREATED=true
+        elif getent group kiosk >/dev/null 2>&1; then
+            echo "Group kiosk already exists"
+            GROUP_CREATED=true
+        else
+            echo "Failed to create group kiosk with groupadd"
+        fi
+    else
+        echo "ERROR: Could not install or find group creation commands"
+        exit 1
+    fi
 fi
 
 if [ "$GROUP_CREATED" = false ]; then
@@ -90,8 +109,20 @@ else
             echo "Failed to create user kiosk with useradd"
         fi
     else
-        echo "ERROR: Neither adduser nor useradd commands found"
-        exit 1
+        echo "Neither adduser nor useradd commands found, attempting to install..."
+        apt-get install -y passwd
+        if command -v useradd >/dev/null 2>&1; then
+            echo "useradd command now available after package installation"
+            if useradd -m kiosk -g kiosk -s /bin/bash 2>&1; then
+                echo "User kiosk created successfully with useradd"
+                USER_CREATED=true
+            else
+                echo "Failed to create user kiosk with useradd"
+            fi
+        else
+            echo "ERROR: Could not install or find user creation commands"
+            exit 1
+        fi
     fi
     
     if [ "$USER_CREATED" = false ]; then

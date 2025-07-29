@@ -19,11 +19,22 @@ mkdir -p /home/kiosk/.config/openbox 2>/dev/null || {
     exit 1
 }
 
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    echo "ERROR: This script must be run as root (use sudo)"
+    exit 1
+fi
+
+echo "Running as root - proceeding with user/group creation..."
+
 # create group (Debian-recommended approach)
 GROUP_CREATED=false
+echo "Attempting to create kiosk group..."
+
 if command -v addgroup >/dev/null 2>&1; then
+    echo "Found addgroup command, attempting to create group..."
     # Use Debian's recommended addgroup command
-    if addgroup --system kiosk 2>/dev/null; then
+    if addgroup --system kiosk 2>&1; then
         echo "Group kiosk created successfully with addgroup"
         GROUP_CREATED=true
     elif getent group kiosk >/dev/null 2>&1; then
@@ -33,8 +44,9 @@ if command -v addgroup >/dev/null 2>&1; then
         echo "Failed to create group kiosk with addgroup"
     fi
 elif command -v groupadd >/dev/null 2>&1; then
+    echo "Found groupadd command, attempting to create group..."
     # Fallback to low-level groupadd command
-    if groupadd -f kiosk 2>/dev/null; then
+    if groupadd -f kiosk 2>&1; then
         echo "Group kiosk created successfully with groupadd"
         GROUP_CREATED=true
     elif getent group kiosk >/dev/null 2>&1; then
@@ -43,6 +55,9 @@ elif command -v groupadd >/dev/null 2>&1; then
     else
         echo "Failed to create group kiosk with groupadd"
     fi
+else
+    echo "ERROR: Neither addgroup nor groupadd commands found"
+    exit 1
 fi
 
 if [ "$GROUP_CREATED" = false ]; then
@@ -54,23 +69,29 @@ fi
 if id -u kiosk &>/dev/null; then
     echo "User kiosk already exists"
 else
+    echo "Attempting to create kiosk user..."
     USER_CREATED=false
     if command -v adduser >/dev/null 2>&1; then
+        echo "Found adduser command, attempting to create user..."
         # Use Debian's recommended adduser command
-        if adduser --system --group --home /home/kiosk --shell /bin/bash kiosk 2>/dev/null; then
+        if adduser --system --group --home /home/kiosk --shell /bin/bash kiosk 2>&1; then
             echo "User kiosk created successfully with adduser"
             USER_CREATED=true
         else
             echo "Failed to create user kiosk with adduser"
         fi
     elif command -v useradd >/dev/null 2>&1; then
+        echo "Found useradd command, attempting to create user..."
         # Fallback to low-level useradd command
-        if useradd -m kiosk -g kiosk -s /bin/bash 2>/dev/null; then
+        if useradd -m kiosk -g kiosk -s /bin/bash 2>&1; then
             echo "User kiosk created successfully with useradd"
             USER_CREATED=true
         else
             echo "Failed to create user kiosk with useradd"
         fi
+    else
+        echo "ERROR: Neither adduser nor useradd commands found"
+        exit 1
     fi
     
     if [ "$USER_CREATED" = false ]; then
@@ -93,9 +114,13 @@ fi
 echo "User and group verification successful"
 
 # rights
-chown -R kiosk:kiosk /home/kiosk 2>/dev/null || {
-    echo "Could not set ownership of /home/kiosk - continuing anyway"
-}
+echo "Setting ownership of /home/kiosk to kiosk:kiosk..."
+if chown -R kiosk:kiosk /home/kiosk 2>&1; then
+    echo "Ownership set successfully"
+else
+    echo "WARNING: Could not set ownership of /home/kiosk - continuing anyway"
+    echo "This may cause permission issues later"
+fi
 
 # remove virtual consoles
 if [ -e "/etc/X11/xorg.conf" ]; then
